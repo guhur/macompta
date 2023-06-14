@@ -25,6 +25,7 @@ Les opérations sont écrites dans un fichier CSV avec les colonnes suivantes :
     - crédit
 """
 import typing as t
+from math import isclose
 import logging
 import tap
 import time
@@ -165,8 +166,7 @@ def main():
     records += ecrire_notes_de_frais(args.notes_de_frais)
     records += ecrire_banque(args.banque)
 
-    immo = load_immobilisations(args.immobilisations)
-    records += ecrire_immobilisations(immo, args.annee)
+    records += ecrire_immobilisations(args.immobilisations, args.annee)
 
     updated_accounts = update_accounts(accounts, records)
     records += ecrire_cloture_comptes(updated_accounts, args.annee)
@@ -180,7 +180,11 @@ def main():
     # Vérification: le solde de tous les comptes (sauf 8) doit être nul
     updated2 = update_accounts(updated_accounts, records)
     for account in updated2:
-        if account["compte"] != "8" and account["solde"] != 0.0:
+        if (
+            int(account["compte"][0]) < 6
+            and account["compte"] not in {"120", "129"}
+            and account["solde"] != 0.0
+        ):
             logger.warning(f"Compte {account['compte']} non soldé : {account['solde']}")
 
     # Vérification: le solde du compte 8 doit être égal au résultat
@@ -193,10 +197,17 @@ def main():
             f"Solde du compte 8 ({compte8['solde']}) différent du résultat ({resultat['solde']})"
         )
 
+    # Vérification: les débits et crédits sont tous positifs:
+    for record in records:
+        if record["débit"] < 0:
+            logger.warning(f"Le débit de {record['débit']} est négatif")
+        if record["crédit"] < 0:
+            logger.warning(f"Le crédit de {record['crédit']} est négatif")
+
     # Vérification: les débits et crédits doivent être égaux
     debits = sum(r["débit"] for r in records)
     credits = sum(r["crédit"] for r in records)
-    if debits != credits:
+    if not isclose(debits, credits):
         logger.warning(f"Les débits ({debits}) et crédits ({credits}) sont différents")
 
 
@@ -219,7 +230,7 @@ def update_accounts(accounts: list[Account], records: list[Record]) -> list[Acco
             logger.warning(f"Compte {compte} non trouvé")
             updated_accounts[compte] = {
                 "compte": compte,
-                "intitulé": "",
+                "intitulé": f"Compte {compte}",
                 "solde": 0.0,
             }
         updated_accounts[compte]["solde"] += record["débit"] - record["crédit"]
@@ -227,11 +238,13 @@ def update_accounts(accounts: list[Account], records: list[Record]) -> list[Acco
     return list(updated_accounts.values())
 
 
-def ecrire_immobilisations(immos: list[Immobilisation], year: int):
+def ecrire_immobilisations(immo_files, year: int):
     """
     Ecrire les opérations d'immobilisations
     """
     records: list[Record] = []
+
+    immos = load_immobilisations(immo_files)
 
     for immo in immos:
         if "amortissement" not in immo:
@@ -241,18 +254,18 @@ def ecrire_immobilisations(immos: list[Immobilisation], year: int):
         compte_amortissement = f"28{immo['compte'][2:]}"
         records.append(
             {
-                "date": immo["date"],
                 "compte": compte_amortissement,
-                "libellé": immo["intitulé"],
+                "date": f"31/12/{year}",
+                "libellé": f"Dot. amort.: {immo['intitulé']}",
                 "débit": 0.0,
                 "crédit": immo["amortissement"][year],
             }
         )
         records.append(
             {
-                "date": immo["date"],
                 "compte": "681",
-                "libellé": immo["intitulé"],
+                "date": f"31/12/{year}",
+                "libellé": f"Dot. amort.: {immo['intitulé']}",
                 "débit": immo["amortissement"][year],
                 "crédit": 0.0,
             }
@@ -290,48 +303,64 @@ def ecrire_cloture_comptes(accounts: list[Account], year: int):
     records: list[Record] = []
     resultat = 0.0
 
+    accounts = sorted(accounts, key=lambda a: a["compte"])
+
     for account in accounts:
+        # Skip if solde = 0
+        if account["solde"] == 0.0:
+            continue
+
         if account["compte"].startswith("6"):
-            resultat -= account["solde"]
+            resultat -= abs(account["solde"])
             records.append(
                 {
                     "date": f"31/12/{year}",
                     "compte": account["compte"],
-                    "libellé": account["intitulé"],
+                    "libellé": f"Fermeture: {account['intitulé']}",
                     "débit": 0.0,
-                    "crédit": account["solde"],
+                    "crédit": abs(account["solde"]),
                 }
             )
 
         elif account["compte"].startswith("7"):
-            resultat += account["solde"]
+            resultat += abs(account["solde"])
             records.append(
                 {
                     "date": f"31/12/{year}",
                     "compte": account["compte"],
-                    "libellé": account["intitulé"],
+                    "libellé": f"Fermeture: {account['intitulé']}",
                     "débit": account["solde"],
                     "crédit": 0.0,
                 }
             )
 
+        elif account["compte"].startswith("8"):
+            continue
+
         else:
+            if account["solde"] > 0:
+                debit = account["solde"]
+                credit = 0.0
+            else:
+                debit = 0.0
+                credit = abs(account["solde"])
+
             records.append(
                 {
                     "date": f"31/12/{year}",
                     "compte": "891",
-                    "libellé": account["intitulé"],
-                    "débit": account["solde"],
-                    "crédit": 0.0,
+                    "libellé": f"Fermeture: {account['intitulé']}",
+                    "débit": debit,
+                    "crédit": credit,
                 }
             )
             records.append(
                 {
                     "date": f"31/12/{year}",
                     "compte": account["compte"],
-                    "libellé": account["intitulé"],
-                    "débit": 0.0,
-                    "crédit": account["solde"],
+                    "libellé": f"Fermeture: {account['intitulé']}",
+                    "débit": credit,
+                    "crédit": debit,
                 }
             )
 
@@ -350,14 +379,28 @@ def ecrire_cloture_comptes(accounts: list[Account], year: int):
         records.append(
             {
                 "date": f"31/12/{year}",
-                "compte": "120",
+                "compte": "129",
                 "libellé": "Résultat de l'exercice",
-                "débit": 0.0,
-                "crédit": -resultat,
+                "débit": abs(resultat),
+                "crédit": 0.0,
             }
         )
 
     return records
+
+
+def convert_date(date: str) -> str:
+    """
+    Convertit la date au format JJ/MM/AAAA
+    """
+    # Convert date like August 5, 2022
+    if "," in date:
+        return time.strftime("%d/%m/%Y", time.strptime(date, "%B %d, %Y"))
+    if "-" in date:
+        return time.strftime("%d/%m/%Y", time.strptime(date, "%Y-%m-%d"))
+    if "/" in date:
+        return date
+    raise ValueError(f"Date {date} not recognized")
 
 
 def load_operations(operations: list[Path]) -> list[Operation]:
@@ -369,13 +412,16 @@ def load_operations(operations: list[Path]) -> list[Operation]:
         for row in load_csv(operation):
             # Discard columns not used
             op: Operation = {
-                "date": str(row["date"]),
+                "date": convert_date(row["date"]),
                 "compte": str(row["compte"]),
                 "libellé": str(row["libellé"]),
                 "ht": float(row["ht"]),
                 "tva": float(row["tva"]),
                 "ttc": float(row["ttc"]),
             }
+            assert isclose(
+                abs(op["ht"]) + abs(op["tva"]), abs(op["ttc"])
+            ), f"Check op {op['libellé']}"
             records.append(op)
 
     return records
@@ -430,34 +476,65 @@ def ecrire_banque(banques: list[Path]) -> list[Record]:
     records: list[Record] = []
 
     for op in operations:
-        # Add the operation (HT -> 512, TVA -> 445, TTC -> 707)
-        records.append(
-            {
-                "date": op["date"],
-                "compte": op["compte"],
-                "libellé": op["libellé"],
-                "débit": op["ht"],
-                "crédit": 0.0,
-            }
-        )
-        records.append(
-            {
-                "date": op["date"],
-                "compte": "445",
-                "libellé": op["libellé"],
-                "débit": op["tva"],
-                "crédit": 0.0,
-            }
-        )
-        records.append(
-            {
-                "date": op["date"],
-                "compte": "512",
-                "libellé": op["libellé"],
-                "débit": 0.0,
-                "crédit": op["ttc"],
-            }
-        )
+        # Seperating a sell from an expense
+        if op["ttc"] >= 0:
+            # Add the operation (HT -> 512, TVA -> 445, TTC -> op["compte"])
+            records.append(
+                {
+                    "date": op["date"],
+                    "compte": op["compte"],
+                    "libellé": op["libellé"],
+                    "débit": op["ht"],
+                    "crédit": 0.0,
+                }
+            )
+            records.append(
+                {
+                    "date": op["date"],
+                    "compte": "445",
+                    "libellé": op["libellé"],
+                    "débit": op["tva"],
+                    "crédit": 0.0,
+                }
+            )
+            records.append(
+                {
+                    "date": op["date"],
+                    "compte": "512",
+                    "libellé": op["libellé"],
+                    "débit": 0.0,
+                    "crédit": op["ttc"],
+                }
+            )
+        else:
+            # Add the operation (HT -> 512, TVA -> 445, TTC -> op["compte"])
+            records.append(
+                {
+                    "date": op["date"],
+                    "compte": op["compte"],
+                    "libellé": op["libellé"],
+                    "débit": 0.0,
+                    "crédit": abs(op["ht"]),
+                }
+            )
+            records.append(
+                {
+                    "date": op["date"],
+                    "compte": "445",
+                    "libellé": op["libellé"],
+                    "débit": 0.0,
+                    "crédit": abs(op["tva"]),
+                }
+            )
+            records.append(
+                {
+                    "date": op["date"],
+                    "compte": "512",
+                    "libellé": op["libellé"],
+                    "débit": abs(op["ttc"]),
+                    "crédit": 0.0,
+                }
+            )
 
     return records
 
