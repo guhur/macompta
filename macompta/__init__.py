@@ -144,7 +144,9 @@ def load_accounts(accounts: list[Path]) -> list[Account]:
     return rows
 
 
-def update_accounts(accounts: list[Account], records: list[Record]) -> list[Account]:
+def update_accounts(
+    accounts: list[Account], records: list[Record]
+) -> list[Account]:
     """
     Met à jour les comptes avec les opérations
     """
@@ -232,7 +234,9 @@ def update_immobilisations(
     return list(updated_immobilisations.values())
 
 
-def filter_records_by_account(records: list[Record], account: str) -> list[Record]:
+def filter_records_by_account(
+    records: list[Record], account: str
+) -> list[Record]:
     """
     Retourne les opérations du compte
     """

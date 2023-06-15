@@ -25,7 +25,6 @@ Les opérations sont écrites dans un fichier CSV avec les colonnes suivantes :
     - crédit
 
 TODO: étalement subvention
-TODO: 2 chiffres après la virgule
 
 """
 from math import isclose
@@ -42,7 +41,9 @@ from macompta import (
     update_accounts,
     load_operations,
     load_immobilisations,
+    build_amortissement,
 )
+from macompta.utils import two_decimals
 
 # Log to stdout
 logging.basicConfig(level=logging.INFO)
@@ -51,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 class Arguments(tap.Tap):
     notes_de_frais: list[Path]
-    banque: list[Path]
+    banques: list[Path]
     compte: Path
     immobilisations: list[Path]
     resultat: Path
@@ -67,7 +68,7 @@ def main():
     records = ouverture_comptes(accounts, args.annee)
     records += affecter_resultat(accounts, args.annee)
     records += ecrire_notes_de_frais(args.notes_de_frais)
-    records += ecrire_banque(args.banque)
+    records += ecrire_banque(args.banques)
 
     records += ecrire_immobilisations(args.immobilisations, args.annee)
 
@@ -78,7 +79,14 @@ def main():
     with open(args.resultat, "w", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=records[0].keys())
         writer.writeheader()
-        writer.writerows(records)
+        # Replace float by string with 2 decimals
+        writer.writerows(
+            {
+                k: two_decimals(v) if isinstance(v, float) else v
+                for k, v in record.items()
+            }
+            for record in records
+        )
 
     # Vérification: le solde de tous les comptes (sauf 8) doit être nul
     updated2 = update_accounts(updated_accounts, records)
@@ -88,7 +96,9 @@ def main():
             and account["compte"] not in {"120", "129"}
             and account["solde"] != 0.0
         ):
-            logger.warning(f"Compte {account['compte']} non soldé : {account['solde']}")
+            logger.warning(
+                f"Compte {account['compte']} non soldé : {account['solde']}"
+            )
 
     # Vérification: le solde du compte 8 doit être égal au résultat
     compte8 = next((a for a in updated2 if a["compte"] == "8"), None)
@@ -111,7 +121,9 @@ def main():
     debits = sum(r["débit"] for r in records)
     credits = sum(r["crédit"] for r in records)
     if not isclose(debits, credits):
-        logger.warning(f"Les débits ({debits}) et crédits ({credits}) sont différents")
+        logger.warning(
+            f"Les débits ({debits}) et crédits ({credits}) sont différents"
+        )
 
 
 def ecrire_immobilisations(immo_files, year: int):

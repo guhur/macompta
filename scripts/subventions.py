@@ -109,13 +109,17 @@ def ecrire_amortissements(
             aug = sum(
                 [
                     op["débit"]
-                    for op in filter_records_by_account(records, compte_amortissement)
+                    for op in filter_records_by_account(
+                        records, compte_amortissement
+                    )
                 ]
             )
             dim = sum(
                 [
                     op["crédit"]
-                    for op in filter_records_by_account(records, compte_amortissement)
+                    for op in filter_records_by_account(
+                        records, compte_amortissement
+                    )
                 ]
             )
             fin = debut + aug - dim

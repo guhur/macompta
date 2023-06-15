@@ -60,7 +60,9 @@ def main():
         for classe in range(1, 9):
             # Filter the accounts
             accounts_classe = filter_accounts_by_class(accounts, classe)
-            accounts_classe = sorted(accounts_classe, key=lambda x: x["compte"])
+            accounts_classe = sorted(
+                accounts_classe, key=lambda x: x["compte"]
+            )
 
             # Export header
             f.write(f"Classe {classe}\n")
@@ -70,7 +72,9 @@ def main():
             credit = 0.0
 
             for account in accounts_classe:
-                records_classe = filter_records_by_account(records, account["compte"])
+                records_classe = filter_records_by_account(
+                    records, account["compte"]
+                )
 
                 account_credit = sum([r["crédit"] for r in records_classe])
                 account_debit = sum([r["débit"] for r in records_classe])
