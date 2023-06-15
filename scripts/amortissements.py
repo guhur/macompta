@@ -1,21 +1,25 @@
 """
-Ce script permet de créer un fichier csv contenant les immobilisations
+Ce script permet de créer un fichier csv contenant les amortissements
 Exemple de fichier de sortie:
 
-Tableau des immobilisations					
-1.1.2021 - 31.12.2021					
-					
-Postes de bilan		Valeur brute au début de l'exercice	Augmentations	Diminutions	Valeur brute à la fin de l'exercice
-Immobilisations corporelles		€3,951.51	€0.00	€3,951.51	€0.00
-215501	Scanner laser	€372.53	€0.00	€372.53	€0.00
-215502	2D Lidar Sensor	€2,064.00	€0.00	€2,064.00	€0.00
-215503	Turtleboat3	€461.64	€0.00	€461.64	€0.00
-218301	PLG Boitier	€496.67	€0.00	€496.67	€0.00
-218302	PC Config	€556.67	€0.00	€556.67	€0.00
-					
-Immobilisations incorporelles		€21,568.20	0	0	€21,568.20
-205001	Logiciel	€19,000.00	0	0	€19,000.00
-205002	Brevet	€2,568.20	0	0	€2,568.20
+
+Tableaux des amortissements,,,,,,
+1.1.2021 - 31.12.2021,,,,,,
+,,,,,,
+Postes de bilan,,Valeur brute au début de l'exercice,Débit,Crédit,Valeur brute à la fin de l'exercice,
+Immobilisations corporelles,,"€3,776.06",€175.45,"€3,454.84",€496.67,
+2815501,Scanner laser,€372.53,€0.00,€372.53,€0.00,
+
+Immobilisations incorporelles,,"€7,568.91","€4,328.41",€0.00,"€11,897.32",
+2805001,Logiciel,"€7,200.00","€4,200.00",€0.00,"€11,400.00",
+2805002,Brevet,€368.91,€128.41,€0.00,€497.32,
+
+Amortissement du logiciel,,,,,,
+
+,,Durée,,5,,
+,,Achat,,"€19,000.00",,
+,,Mode,,linéaire,,
+,,Amortissement annuel,,"€3,800.00",,
 """
 import logging
 from pathlib import Path
@@ -69,46 +73,47 @@ def main(args: Arguments) -> None:
 
     # Write the header
     with open(args.output, "w") as f:
-        f.write("Tableau des immobilisations\n")
+        f.write("Tableau des amortissements\n")
         f.write(f"1.1.{args.annee} - 31.12.{args.annee}\n")
         f.write("\n")
         f.write(
             "Postes de bilan\tValeur brute au début de l'exercice\tAugmentations\tDiminutions\tValeur brute à la fin de l'exercice\n"
         )
 
-    # Ecriture des immobilisations corporelles
+    # Ecriture des amortissements liees aux immobilisations corporelles
     with open(args.output, "a") as f:
         f.write("Immobilisations corporelles\t\t\t\t\n")
     immo_corporelles = [i for i in immobilisations if is_immo_corporelle(i)]
-    ecrire_immobilisations(args.output, immo_corporelles, records)
+    ecrire_amortissements(args.output, immo_corporelles, records)
 
-    # Ecriture des immobilisations incorporelles
+    # Ecriture des amortissements liees aux immobilisations incorporelles
     with open(args.output, "a") as f:
         f.write("Immobilisations incorporelles\t\t\t\t\n")
     immo_incorporelles = [i for i in immobilisations if not is_immo_corporelle(i)]
-    ecrire_immobilisations(args.output, immo_incorporelles, records)
+    ecrire_amortissements(args.output, immo_incorporelles, records)
 
 
-def ecrire_immobilisations(
+def ecrire_amortissements(
     output: Path, immobilisations: list[Immobilisation], records: list[Record]
 ) -> None:
     """
-    Ecrit les immobilisations corporelles dans le fichier de sortie
+    Ecrit les amortissements liées aux immobilisations corporelles dans le fichier de sortie
     """
     with open(output, "a") as f:
         # Write the immobilisations
         for immo in immobilisations:
             debut = immo["montant"]
+            compte_amortissement = f"28{immo['compte'][2:]}"
             aug = sum(
                 [
                     op["débit"]
-                    for op in filter_records_by_account(records, immo["compte"])
+                    for op in filter_records_by_account(records, compte_amortissement)
                 ]
             )
             dim = sum(
                 [
                     op["crédit"]
-                    for op in filter_records_by_account(records, immo["compte"])
+                    for op in filter_records_by_account(records, compte_amortissement)
                 ]
             )
             fin = debut + aug - dim

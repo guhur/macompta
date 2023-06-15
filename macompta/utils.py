@@ -13,3 +13,10 @@ def convert_date(date: str) -> str:
     if "/" in date:
         return date
     raise ValueError(f"Date {date} not recognized")
+
+
+def two_decimals(number: float) -> float:
+    """
+    Round a number to two decimals
+    """
+    return round(number, 2)

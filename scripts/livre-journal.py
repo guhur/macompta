@@ -23,6 +23,10 @@ Les opérations sont écrites dans un fichier CSV avec les colonnes suivantes :
     - libellé
     - débit
     - crédit
+
+TODO: étalement subvention
+TODO: 2 chiffres après la virgule
+
 """
 from math import isclose
 import logging

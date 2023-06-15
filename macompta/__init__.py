@@ -237,3 +237,30 @@ def filter_records_by_account(records: list[Record], account: str) -> list[Recor
     Retourne les opérations du compte
     """
     return [r for r in records if r["compte"] == account]
+
+
+def load_journals(journals: list[Path]) -> list[Record]:
+    """
+    Load the journals
+    """
+    records: list[Record] = []
+    for journal in journals:
+        for row in load_csv(journal):
+            records.append(
+                {
+                    "date": convert_date(row["date"]),
+                    "compte": str(row["compte"]),
+                    "libellé": str(row["libellé"]),
+                    "débit": float(row["débit"]),
+                    "crédit": float(row["crédit"]),
+                }
+            )
+
+    return records
+
+
+def filter_accounts_by_class(accounts: list[Account], classe: int):
+    """
+    Filter the accounts by classe
+    """
+    return [a for a in accounts if a["compte"].startswith(str(classe))]
