@@ -240,7 +240,7 @@ def filter_records_by_account(
     """
     Retourne les opérations du compte
     """
-    return [r for r in records if r["compte"] == account]
+    return [r for r in records if r["compte"].startswith(account)]
 
 
 def load_journals(journals: list[Path]) -> list[Record]:

@@ -60,7 +60,14 @@ Exemple de fichier de sortie:
 """
 from pathlib import Path
 import tap
-from macompta import Account, load_accounts, load_journals, update_accounts
+from macompta import (
+    Account,
+    load_accounts,
+    load_journals,
+    update_accounts,
+    filter_records_by_account,
+    Record,
+)
 
 
 class Arguments(tap.Tap):
@@ -72,12 +79,6 @@ class Arguments(tap.Tap):
     comptes: list[Path]
     annee: int
     output: Path
-
-
-def ecrire_actif(compte: list[Account], output: Path, annee: int):
-    """
-    Ecrit l'actif du bilan.
-    """
 
 
 def main():
@@ -94,9 +95,9 @@ def main():
     compte = load_accounts(args.comptes)
     compte = update_accounts(compte, journals)
 
-    ecrire_header(args.annee)
-    ecrire_actif(compte, args.annee)
-    ecrire_passif(compte, args.annee)
+    ecrire_header(args.output, args.annee)
+    ecrire_actif(journals, args.output)
+    ecrire_passif(compte, args.output)
 
 
 def ecrire_header(output: Path, annee: int):
@@ -106,5 +107,66 @@ def ecrire_header(output: Path, annee: int):
     with open(output, "w") as fid:
         fid.write(",,,,,,,,,\n")
         fid.write(",Bilan comptable,,,,,,,,\n")
-        fid.write(f",{annee - 4}.12.2017 - {annee}.12.{annee},,,,,,,,\n")
+        fid.write(f"1.1.{annee} - 31.12.{annee}\n")
         fid.write(",,,,,,,,,\n")
+
+
+def ecrire_actif(records: list[Record], output: Path):
+    """
+    Ecrit l'actif du bilan.
+    """
+    with open(output, "a") as fid:
+        fid.write(",,Exercice N,,Exercice N-1\n")
+        fid.write("ACTIF,,,,\n")
+        fid.write("ACTIF IMMOBILISE,,,,\n")
+
+    ecrire_actif_immobilise(records, output)
+
+
+def ecrire_actif_immobilise(records: list[Record], output: Path):
+    with open(output, "a") as fid:
+        fid.write("ACTIF IMMOBILISE,,,,\n")
+
+    # Calcul les totaux des immobilisations incorporelles (comptes 20x)
+    # - exercice N: brut, amortissements & provisions, net
+    # - exercice N-1: net
+    # Puis affiche les lignes correspondantes
+    immo_incorporelles = filter_records_by_account(records, "20")
+    amort_incorporelles = filter_records_by_account(records, "280")
+    prov_incorporelles = filter_records_by_account(records, "281")
+    brut_n = sum(
+        [record["débit"] - record["crédit"] for record in immo_incorporelles]
+    )
+    amort_n = sum(
+        [record["débit"] - record["crédit"] for record in amort_incorporelles]
+    )
+    prov_n = sum(
+        [record["débit"] - record["crédit"] for record in prov_incorporelles]
+    )
+    net_n = brut_n - amort_n - prov_n
+
+    with open(output, "a") as fid:
+        fid.write(
+            f"Immobilisations incorporelles,{brut_n},{amort_n+prov_n},{net_n}\n"
+        )
+    # fid.write(",,,,,\n")
+    # fid.write("Frais d'établissement,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Frais de recherche et de développement,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write(
+    #     "Concessions, brevets, licences, marques, droits et valeurs similaires,,,,,,,,,\n"
+    # )
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Fonds commercial,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Autres immobilisations incorporelles,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Immobilisations corporelles,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Terrains,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Constructions,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
+    # fid.write("Immobilisations financières,,,,,,,,,\n")
+    # fid.write(",,,,,,,,,\n")
