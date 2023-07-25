@@ -8,6 +8,9 @@ import tap
 def generate_grand_livre(journal_path: str, grand_livre_path: str):
     # Load the journal data, but drop the first row
     df = pd.read_csv(journal_path, skiprows=1)
+    # Convert all cells containing € amounts to numeric. e.g. parse €10,000.00 to 10000.00
+    df['Débit'] = pd.to_numeric(df['Débit'].str.replace('€', '').str.replace(',', ''))
+    df['Crédit'] = pd.to_numeric(df['Crédit'].str.replace('€', '').str.replace(',', ''))
 
     # Sort the dataframe by 'N de compte' for processing
     df = df.sort_values('N de compte')
